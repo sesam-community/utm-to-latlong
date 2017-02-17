@@ -1,0 +1,17 @@
+sudo: required
+
+language: python
+python:
+  -  "3.5"
+
+services:
+  - docker
+
+script: true
+
+after_success:
+  - if [ "$TRAVIS_BRANCH" == "master" ]; then
+    docker build -t sesamcommunity/utm-to-latlong .;
+    docker login -u="$DOCKER_USERNAME" -p="$DOCKER_PASSWORD";
+    docker push sesamcommunity/utm-to-latlong:latest;
+    fi
