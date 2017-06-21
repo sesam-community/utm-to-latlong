@@ -4,13 +4,19 @@ MAINTAINER Tom Bech "tom.bech@sesam.io"
 
 EXPOSE 5001/tcp
 
-ENV DEBIAN_FRONTEND noninteractive
+RUN \
+apt-get update && \
+DEBIAN_FRONTEND=noninteractive apt-get install -y locales && \
+apt-get clean all && \
+apt-get -y autoremove --purge && \
+rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+
 RUN localedef -i en_US -f UTF-8 en_US.UTF-8
 ENV LANGUAGE en_US.UTF-8
 ENV LANG en_US.UTF-8
 ENV LC_ALL en_US.UTF-8
 RUN locale-gen en_US.UTF-8
-RUN dpkg-reconfigure locales
+RUN DEBIAN_FRONTEND=noninteractive dpkg-reconfigure locales
 ENV PYTHON_EGG_CACHE /tmp
 ENV PYTHONIOENCODING UTF-8
 
