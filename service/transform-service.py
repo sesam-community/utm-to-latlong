@@ -10,7 +10,7 @@ app = Flask(__name__)
 logger = None
 
 easting_property = os.environ.get("EASTING_PROPERTY", "easting")
-northing_property = os.environ.get("EASTING_PROPERTY", "northing")
+northing_property = os.environ.get("NORTHING_PROPERTY", "northing")
 zone_property = os.environ.get("ZONE_PROPERTY", "zone")
 zone_default = os.environ.get("ZONE_DEFAULT", "32")
 hemi_property = os.environ.get("HEMI_PROPERTY", "hemi")
@@ -92,7 +92,19 @@ def transform_entity(entity):
     global long_property
     global include_latlong
     global latlong_property
-    
+
+    #logger.info("easting_property=%s", easting_property)
+    #logger.info("northing_property=%s", northing_property)
+    #logger.info("zone_property=%s", zone_property)
+    #logger.info("zone_default=%s", zone_default)
+    #logger.info("hemi_property=%s", hemi_property)
+    #logger.info("hemi_default=%s", hemi_default)
+    #logger.info("hemi_northern_value=%s", hemi_northern_value)
+    #logger.info("lat_property=%s", lat_property)
+    #logger.info("long_property=%s", long_property)
+    #logger.info("include_latlong=%s", include_latlong)
+    #logger.info("latlong_property=%s", latlong_property)
+
     if easting_property not in entity:
         if logger:
             logger.warning("No easting coordinate found in entity, skipping...")
