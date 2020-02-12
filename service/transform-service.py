@@ -117,6 +117,10 @@ def transform_entity(entity):
                 logger.warning("Multiple easting coordinates found in entity, skipping...")
             return entity
         easting_value = easting_value[0]
+    elif not easting_value:
+        if logger:
+            logger.warning("skipping due to null easting value...")
+        return entity
 
     if northing_property not in entity:
         if logger:
@@ -130,6 +134,10 @@ def transform_entity(entity):
                 logger.warning("Multiple northing coordinates found in entity, skipping...")
             return entity
         northing_value = northing_value[0]
+    elif not northing_value:
+        if logger:
+            logger.warning("skipping due to null northing value...")
+        return entity
 
     zone_value = entity.get(zone_property, zone_default)
     if isinstance(zone_value, list):
