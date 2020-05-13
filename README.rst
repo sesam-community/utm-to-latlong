@@ -9,7 +9,8 @@ the `HTTP transform <https://docs.sesam.io/configuration.html#the-http-transform
    :alt: Build Status
    :target: https://travis-ci.org/sesam-community/utm-to-latlong
 
-It converts UTM33 (EUREF89 aka GAB) coordinates to LatLong (GPS coordinates aka WGS84).
+It converts UTM 32 (EUREF89 aka GAB) coordinates to LatLong (GPS coordinates aka WGS84).
+UTM 32 is the default, but other zones can also be converted by providing the zone in the payload.
 
 
 Running locally in a virtual environment
