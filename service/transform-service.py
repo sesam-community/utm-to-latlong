@@ -21,58 +21,206 @@ long_property = os.environ.get("LONGITUDE_PROPERTY", "long")
 include_latlong = os.environ.get("INCLUDE_LAT_LONG", "False")
 latlong_property = os.environ.get("LAT_LONG_PROPERTY", "lat_long")
 
+#################################################################
+# All the following code to calculate coordinates is copied     #
+# and rewritten as python from                                  #
+# http://home.hiwaay.net/~taylorc/toolbox/geography/geoutm.html #
+#################################################################
 
-def utm_to_lat_long(zone, easting, northing, northernHemisphere=True):
+pi = 3.14159265358979
+# Ellipsoid model constants (actual values here are for WGS84)
+sm_a = 6378137.0
+sm_b = 6356752.314
+sm_EccSquared = 6.69437999013e-03
+
+UTMScaleFactor = 0.9996
+
+
+def utm_central_meridian(zone):
+    """
+    Determines the central meridian for the given UTM zone.
+
+    Inputs:
+        zone - An integer value designating the UTM zone, range [1,60].
+
+    Returns:
+        The central meridian for the given UTM zone, in radians, or zero
+        if the UTM zone parameter is outside the range [1,60].
+        Range of the central meridian is the radian equivalent of [-177,+177].
+    """
+    return deg_to_rad(-183.0 + (zone * 6.0))
+
+
+def deg_to_rad(deg):
+    """
+    Converts degrees to radians.
+    """
+    return deg / 180.0 * pi
+
+
+def rad_to_deg(rad):
+    """
+    Converts radians to degrees.
+    """
+    return rad / pi * 180.0
+
+
+def footpoint_laititude(y):
+    """
+    Computes the footpoint latitude for use in converting transverse
+    Mercator coordinates to ellipsoidal coordinates.
+
+    Reference: Hoffmann-Wellenhof, B., Lichtenegger, H., and Collins, J.,
+        GPS: Theory and Practice, 3rd ed.  New York: Springer-Verlag Wien, 1994.
+
+    Inputs:
+        y - The UTM northing coordinate, in meters.
+
+    Returns:
+        The footpoint latitude, in radians.
+    """
+    # Precalculate n (Eq. 10.18)
+    n = (sm_a - sm_b) / (sm_a + sm_b)
+
+    # Precalculate alpha_ (Eq. 10.22)
+    # (Same as alpha in Eq. 10.17)
+    alpha_ = ((sm_a + sm_b) / 2.0) * (1 + (math.pow(n, 2.0) / 4) + (math.pow(n, 4.0) / 64))
+
+    # Precalculate y_ (Eq. 10.23)
+    y_ = y / alpha_
+
+    # Precalculate beta_ (Eq. 10.22)
+    beta_ = (3.0 * n / 2.0) + (-27.0 * math.pow(n, 3.0) / 32.0) + (269.0 * math.pow(n, 5.0) / 512.0)
+
+    # Precalculate gamma_ (Eq. 10.22)
+    gamma_ = (21.0 * math.pow(n, 2.0) / 16.0) + (-55.0 * math.pow(n, 4.0) / 32.0)
+
+    # Precalculate delta_ (Eq. 10.22)
+    delta_ = (151.0 * math.pow(n, 3.0) / 96.0) + (-417.0 * math.pow(n, 5.0) / 128.0)
+
+    # Precalculate epsilon_ (Eq. 10.22)
+    epsilon_ = (1097.0 * math.pow(n, 4.0) / 512.0)
+
+    # Now calculate the sum of the series (Eq. 10.21)
+    result = y_ + (beta_ * math.sin(2.0 * y_)) + (gamma_ * math.sin(4.0 * y_)) + \
+             (delta_ * math.sin(6.0 * y_)) + (epsilon_ * math.sin(8.0 * y_))
+
+    return result
+
+
+def map_xy_to_lat_lon(x, y, lambda0):
+    """
+    Converts x and y coordinates in the Transverse Mercator projection to
+    a latitude/longitude pair.  Note that Transverse Mercator is not
+    the same as UTM; a scale factor is required to convert between them.
+
+    Reference: Hoffmann-Wellenhof, B., Lichtenegger, H., and Collins, J.,
+        GPS: Theory and Practice, 3rd ed.  New York: Springer-Verlag Wien, 1994.
+
+    Inputs:
+        x - The easting of the point, in meters.
+        y - The northing of the point, in meters.
+        lambda0 - Longitude of the central meridian to be used, in radians.
+
+    Outputs:
+        philambda - A 2-element containing the latitude and longitude
+                   in radians.
+
+    Returns:
+        The function does not return a value.
+
+    Remarks:
+       The local variables Nf, nuf2, tf, and tf2 serve the same purpose as
+       N, nu2, t, and t2 in MapLatLonToXY, but they are computed with respect
+       to the footpoint latitude phif.
+
+       x1frac, x2frac, x2poly, x3poly, etc. are to enhance readability and
+       to optimize computations.
+    """
+    # Get the value of phif, the footpoint latitude.
+    phif = footpoint_laititude(y)
+
+    # Precalculate ep2
+    ep2 = (math.pow(sm_a, 2.0) - math.pow(sm_b, 2.0)) / math.pow(sm_b, 2.0)
+
+    # Precalculate cos (phif)
+    cf = math.cos(phif)
+
+    # Precalculate nuf2
+    nuf2 = ep2 * math.pow(cf, 2.0)
+
+    # Precalculate Nf and initialize Nfpow
+    Nf = math.pow(sm_a, 2.0) / (sm_b * math.sqrt(1 + nuf2))
+    Nfpow = Nf
+
+    # Precalculate tf
+    tf = math.tan(phif)
+    tf2 = tf * tf
+    tf4 = tf2 * tf2
+
+    # Precalculate fractional coefficients for x**n in the equations
+    # below to simplify the expressions for latitude and longitude.
+    x1frac = 1.0 / (Nfpow * cf)
+
+    Nfpow *= Nf  # now equals Nf**2)
+    x2frac = tf / (2.0 * Nfpow)
+
+    Nfpow *= Nf  # now equals Nf**3)
+    x3frac = 1.0 / (6.0 * Nfpow * cf)
+
+    Nfpow *= Nf  # now equals Nf**4)
+    x4frac = tf / (24.0 * Nfpow)
+
+    Nfpow *= Nf  # now equals Nf**5)
+    x5frac = 1.0 / (120.0 * Nfpow * cf)
+
+    Nfpow *= Nf  # now equals Nf**6)
+    x6frac = tf / (720.0 * Nfpow)
+
+    Nfpow *= Nf  # now equals Nf**7)
+    x7frac = 1.0 / (5040.0 * Nfpow * cf)
+
+    Nfpow *= Nf  # now equals Nf**8)
+    x8frac = tf / (40320.0 * Nfpow)
+
+    # Precalculate polynomial coefficients for x**n.
+    # -- x**1 does not have a polynomial coefficient.
+    x2poly = -1.0 - nuf2
+
+    x3poly = -1.0 - 2 * tf2 - nuf2
+
+    x4poly = 5.0 + 3.0 * tf2 + 6.0 * nuf2 - 6.0 * tf2 * nuf2 - 3.0 * (nuf2 * nuf2) - 9.0 * tf2 * (nuf2 * nuf2)
+
+    x5poly = 5.0 + 28.0 * tf2 + 24.0 * tf4 + 6.0 * nuf2 + 8.0 * tf2 * nuf2
+
+    x6poly = -61.0 - 90.0 * tf2 - 45.0 * tf4 - 107.0 * nuf2 + 162.0 * tf2 * nuf2
+
+    x7poly = -61.0 - 662.0 * tf2 - 1320.0 * tf4 - 720.0 * (tf4 * tf2)
+
+    x8poly = 1385.0 + 3633.0 * tf2 + 4095.0 * tf4 + 1575 * (tf4 * tf2)
+
+    # Calculate latitude
+    latitude = phif + x2frac * x2poly * (x * x) + x4frac * x4poly * math.pow(x, 4.0) + x6frac * x6poly * math.pow(x, 6.0) + x8frac * x8poly * math.pow(x, 8.0)
+
+    # Calculate longitude
+    longitude = lambda0 + x1frac * x + x3frac * x3poly * math.pow(x, 3.0) + x5frac * x5poly * math.pow(x, 5.0) + x7frac * x7poly * math.pow(x, 7.0)
+
+    return latitude, longitude
+
+
+def utm_xy_to_lat_lon(x, y, zone, northernHemisphere=True):
+
+    x -= 500000.0
+    x /= UTMScaleFactor
+
+    # If in southern hemisphere, adjust y accordingly.
     if not northernHemisphere:
-        northing = 10000000 - northing
+        y -= 10000000.0
 
-    a = 6378137
-    e = 0.081819191
-    e1sq = 0.006739497
-    k0 = 0.9996
+    y /= UTMScaleFactor
 
-    arc = northing / k0
-    mu = arc / (a * (1 - math.pow(e, 2) / 4.0 - 3 * math.pow(e, 4) / 64.0 - 5 * math.pow(e, 6) / 256.0))
-
-    ei = (1 - math.pow((1 - e * e), (1 / 2.0))) / (1 + math.pow((1 - e * e), (1 / 2.0)))
-
-    ca = 3 * ei / 2 - 27 * math.pow(ei, 3) / 32.0
-
-    cb = 21 * math.pow(ei, 2) / 16 - 55 * math.pow(ei, 4) / 32
-    cc = 151 * math.pow(ei, 3) / 96
-    cd = 1097 * math.pow(ei, 4) / 512
-    phi1 = mu + ca * math.sin(2 * mu) + cb * math.sin(4 * mu) + cc * math.sin(6 * mu) + cd * math.sin(8 * mu)
-
-    n0 = a / math.pow((1 - math.pow((e * math.sin(phi1)), 2)), (1 / 2.0))
-
-    r0 = a * (1 - e * e) / math.pow((1 - math.pow((e * math.sin(phi1)), 2)), (3 / 2.0))
-    fact1 = n0 * math.tan(phi1) / r0
-
-    _a1 = 500000 - easting
-    dd0 = _a1 / (n0 * k0)
-    fact2 = dd0 * dd0 / 2
-
-    t0 = math.pow(math.tan(phi1), 2)
-    Q0 = e1sq * math.pow(math.cos(phi1), 2)
-    fact3 = (5 + 3 * t0 + 10 * Q0 - 4 * Q0 * Q0 - 9 * e1sq) * math.pow(dd0, 4) / 24
-
-    fact4 = (61 + 90 * t0 + 298 * Q0 + 45 * t0 * t0 - 252 * e1sq - 3 * Q0 * Q0) * math.pow(dd0, 6) / 720
-
-    lof1 = _a1 / (n0 * k0)
-    lof2 = (1 + 2 * t0 + Q0) * math.pow(dd0, 3) / 6.0
-    lof3 = (5 - 2 * Q0 + 28 * t0 - 3 * math.pow(Q0, 2) + 8 * e1sq + 24 * math.pow(t0, 2)) * math.pow(dd0, 5) / 120
-    _a2 = (lof1 - lof2 + lof3) / math.cos(phi1)
-    _a3 = _a2 * 180 / math.pi
-
-    latitude = 180 * (phi1 - fact1 * (fact2 + fact3 + fact4)) / math.pi
-
-    if not northernHemisphere:
-        latitude = -latitude
-
-    longitude = ((zone > 0) and (6 * zone - 183.0) or 3.0) - _a3
-
-    return (latitude, longitude)
-
+    cmeridian = utm_central_meridian(zone)
+    return map_xy_to_lat_lon(x, y, cmeridian)
 
 
 def transform_entity(entity):
@@ -198,7 +346,10 @@ def transform_entity(entity):
     if logger:
         logger.debug("Converting %s %s, %s %s..." % (easting_value, northing_value, zone_value, hemi_value))
 
-    lat, lon = utm_to_lat_long(zone_value, easting_value, northing_value, hemi_value)
+    latitude, longitude = utm_xy_to_lat_lon(easting_value, northing_value, zone_value, hemi_value)
+
+    lat = rad_to_deg(latitude)
+    lon = rad_to_deg(longitude)
 
     if logger:
         logger.debug("Result: %s %s" % (lat, lon))
@@ -212,7 +363,6 @@ def transform_entity(entity):
         entity[latlong_property] = "%s, %s" % (lat, lon)
 
     return entity
-
 
 
 @app.route('/transform', methods=['POST'])
